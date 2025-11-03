@@ -251,7 +251,8 @@ class ConversationVisualizer:
         
         ax1 = fig.add_subplot(gs[0, :])  # Phase timeline (full width)
         ax2 = fig.add_subplot(gs[1, :])  # Mood scatter plot (full width)
-        ax3 = fig.add_subplot(gs[2, :])  # Summary sentences per phase
+        ax3a = fig.add_subplot(gs[2, 0])  # Peak hours (left)
+        ax3b = fig.add_subplot(gs[2, 1])  # Activity heatmap (right)
         ax4 = fig.add_subplot(gs[3, :])  # Activity timeline (full width)
         
         # Phase timeline
@@ -273,11 +274,17 @@ class ConversationVisualizer:
                                  c=range(len(self.phases)), cmap='viridis', alpha=0.7,
                                  edgecolors='white', linewidths=2, zorder=10)
             
-            # Add phase labels
+            # Add phase labels with better readability
             for i, (phase, x, y) in enumerate(zip(self.phases, sentiments, normalized_energy)):
-                ax2.text(x, y, f"{phase.mood_emoji}\nPhase {i+1}", 
-                        ha='center', va='center', fontsize=8, weight='bold',
-                        color='white', zorder=20)
+                # Add background box for better text readability
+                text = ax2.text(x, y, f"{phase.mood_emoji}\nPhase {i+1}", 
+                        ha='center', va='center', fontsize=10, weight='bold',
+                        color='#2C3E50', zorder=25,
+                        bbox=dict(boxstyle='round,pad=0.5', 
+                                facecolor='white', 
+                                edgecolor=self.colors[i % len(self.colors)],
+                                linewidth=2,
+                                alpha=0.9))
             
             # Add quadrant labels
             ax2.text(0.7, 0.85, 'High Energy\nPleasant', ha='center', fontsize=10, 
@@ -302,24 +309,9 @@ class ConversationVisualizer:
             ax2.spines['top'].set_visible(False)
             ax2.spines['right'].set_visible(False)
         
-        # Summary sentences per phase
-        if self.phases:
-            ax3.axis('off')
-            ax3.set_title('Phase Summaries', fontsize=12, weight='bold', pad=10, color='#2C3E50')
-            
-            # Create a text display for each phase's summary
-            y_positions = np.linspace(0.95, 0.05, len(self.phases))
-            for i, (phase, y_pos) in enumerate(zip(self.phases, y_positions)):
-                phase_label = f"{phase.mood_emoji} Phase {i+1}:"
-                summary = phase.summary_sentence if phase.summary_sentence else "No summary available."
-                
-                full_text = f"{phase_label} {summary}"
-                
-                ax3.text(0.02, y_pos, full_text, transform=ax3.transAxes,
-                       fontsize=9, weight='bold' if i == 0 else 'normal',
-                       bbox=dict(boxstyle='round,pad=0.8', facecolor=self.colors[i % len(self.colors)], 
-                               alpha=0.25, edgecolor=self.colors[i % len(self.colors)], linewidth=1.5),
-                       wrap=True)
+        # Activity patterns: Peak hours and heatmap
+        self._plot_peak_hours(ax3a)
+        self._plot_activity_heatmap(ax3b)
         
         # Activity timeline
         self._plot_message_activity(ax4)
@@ -377,38 +369,56 @@ class ConversationVisualizer:
                 hour = msg.timestamp.hour
                 hour_counts[hour] += 1
         
-        hours = sorted(hour_counts.keys())
-        counts = [hour_counts[h] for h in hours]
+        # Get all hours (0-23) and their counts
+        all_hours = list(range(24))
+        counts = [hour_counts[h] for h in all_hours]
         
-        colors = plt.cm.YlOrRd(np.linspace(0.4, 1, len(hours)))
-        bars = ax.bar(hours, counts, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        # Create color gradient based on activity level
+        max_count = max(counts) if counts else 1
+        colors = []
+        for count in counts:
+            if count == 0:
+                colors.append('#E8E8E8')  # Light gray for no activity
+            elif count == max_count:
+                colors.append('#FF6B6B')  # Red for peak hour
+            else:
+                # Gradient from yellow to orange based on relative activity
+                intensity = count / max_count
+                colors.append(plt.cm.YlOrRd(0.4 + 0.6 * intensity))
         
-        # Highlight peak hour
-        if counts:
-            max_idx = counts.index(max(counts))
+        bars = ax.bar(all_hours, counts, color=colors, alpha=0.85, 
+                     edgecolor='white', linewidth=1.5)
+        
+        # Highlight peak hour with stronger styling
+        if max_count > 0:
+            max_idx = counts.index(max_count)
             bars[max_idx].set_color('#FF6B6B')
             bars[max_idx].set_edgecolor('#2C3E50')
-            bars[max_idx].set_linewidth(2.5)
+            bars[max_idx].set_linewidth(3)
             bars[max_idx].set_alpha(1.0)
+            bars[max_idx].set_zorder(10)
         
-        ax.set_xlabel('Hour of Day', fontsize=11, weight='bold', color='#34495E')
-        ax.set_ylabel('Messages', fontsize=11, weight='bold', color='#34495E')
+        ax.set_xlabel('Hour of Day', fontsize=12, weight='bold', color='#34495E')
+        ax.set_ylabel('Messages', fontsize=12, weight='bold', color='#34495E')
         ax.set_title('⏰ Peak Activity Hours', fontsize=13, weight='bold', 
                     pad=15, color='#2C3E50')
-        ax.set_xticks(range(0, 24, 2))
-        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 2)], rotation=45, ha='right')
-        ax.grid(True, alpha=0.2, axis='y', linestyle='--')
+        ax.set_xticks(range(0, 24, 3))  # Show every 3 hours instead of 2 for better readability
+        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 3)], 
+                          rotation=0, ha='center', fontsize=10, weight='bold')
+        ax.grid(True, alpha=0.2, axis='y', linestyle='--', zorder=0)
         ax.set_facecolor('#FAFAFA')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
+        # Adjust bottom margin to prevent label cutoff
+        ax.tick_params(axis='x', pad=8)
         
-        # Add value labels on bars
-        for bar in bars:
+        # Add value labels on bars (only for non-zero values)
+        for i, bar in enumerate(bars):
             height = bar.get_height()
             if height > 0:
                 ax.text(bar.get_x() + bar.get_width()/2., height,
                        f'{int(height)}', ha='center', va='bottom', 
-                       fontweight='bold', fontsize=9)
+                       fontweight='bold', fontsize=9, color='#2C3E50')
     
     def _plot_day_of_week_activity(self, ax):
         """Plot message activity by day of week."""
@@ -453,32 +463,49 @@ class ConversationVisualizer:
         
         for msg in self.messages:
             if not msg.is_system:
-                day = msg.timestamp.weekday()  # 0=Monday
+                day = msg.timestamp.weekday()  # 0=Monday, 6=Sunday
                 hour = msg.timestamp.hour
                 heatmap_data[day, hour] += 1
         
-        # Create heatmap
+        # Create heatmap with enhanced styling
         im = ax.imshow(heatmap_data, cmap='YlOrRd', aspect='auto', 
-                      interpolation='nearest', alpha=0.9)
+                      interpolation='nearest', alpha=0.9, vmin=0)
         
         # Set labels
         day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        ax.set_xticks(range(0, 24, 2))
-        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 2)])
+        ax.set_xticks(range(0, 24, 4))  # Show every 4 hours for better readability
+        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 4)], 
+                          fontsize=10, weight='bold', rotation=0, ha='center')
         ax.set_yticks(range(7))
-        ax.set_yticklabels(day_names)
+        ax.set_yticklabels(day_names, fontsize=11, weight='bold', va='center')
         
-        ax.set_xlabel('Hour of Day', fontsize=11, weight='bold', color='#34495E')
-        ax.set_ylabel('Day of Week', fontsize=11, weight='bold', color='#34495E')
+        ax.set_xlabel('Hour of Day', fontsize=12, weight='bold', color='#34495E')
+        ax.set_ylabel('Day of Week', fontsize=12, weight='bold', color='#34495E')
         ax.set_title('🔥 Activity Heatmap', fontsize=13, weight='bold', 
                     pad=15, color='#2C3E50')
         
-        # Add colorbar
-        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-        cbar.set_label('Messages', fontsize=10, weight='bold')
+        # Add colorbar with better styling
+        cbar = plt.colorbar(im, ax=ax, shrink=0.8, pad=0.02)
+        cbar.set_label('Messages', fontsize=11, weight='bold', color='#34495E')
+        cbar.ax.tick_params(labelsize=10)
         
-        # Rotate x-axis labels
-        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        # Adjust padding to prevent label cutoff
+        ax.tick_params(axis='x', pad=8)
+        ax.tick_params(axis='y', pad=5)
+        
+        # Add grid lines for better readability
+        ax.set_xticks(range(24), minor=True)
+        ax.set_yticks(range(7), minor=True)
+        ax.grid(which='minor', color='white', linestyle='-', linewidth=0.5, alpha=0.3)
+        
+        # Find and highlight peak cell
+        max_val = np.max(heatmap_data)
+        if max_val > 0:
+            max_day, max_hour = np.unravel_index(np.argmax(heatmap_data), heatmap_data.shape)
+            # Add a subtle border around the peak cell
+            rect = Rectangle((max_hour - 0.5, max_day - 0.5), 1, 1,
+                           fill=False, edgecolor='#FF6B6B', linewidth=3, zorder=10)
+            ax.add_patch(rect)
     
     def _plot_quick_stats(self, ax):
         """Display quick statistics in a clean format."""
