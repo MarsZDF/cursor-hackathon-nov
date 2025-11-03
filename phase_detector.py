@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from whatsapp_parser import Message
 import numpy as np
 from collections import Counter
+from sentiment_analyzer import SentimentAnalyzer
 
 
 @dataclass
@@ -21,6 +22,10 @@ class Phase:
     dominant_sender: str  # Most active sender in this phase
     message_count: int
     duration_hours: float
+    mood: str = "Neutral"  # Overall mood of the phase
+    vibe: str = "Calm"  # Vibe description
+    mood_emoji: str = "😐"  # Emoji representing the mood
+    sentiment: float = 0.0  # Average sentiment score
 
 
 class PhaseDetector:
@@ -28,6 +33,7 @@ class PhaseDetector:
     
     def __init__(self, messages: List[Message]):
         self.messages = messages
+        self.sentiment_analyzer = SentimentAnalyzer()
     
     def detect_phases(
         self,
@@ -201,8 +207,11 @@ class PhaseDetector:
         sender_counts = Counter(msg.sender for msg in phase_messages if not msg.is_system)
         dominant_sender = sender_counts.most_common(1)[0][0] if sender_counts else "Unknown"
         
-        # Determine phase type
-        phase_type = self._classify_phase(phase_messages, duration)
+        # Analyze mood and vibe first (used by classification)
+        mood_data = self.sentiment_analyzer.analyze_phase(phase_messages)
+        
+        # Determine phase type with mood (pass mood_data to avoid re-analyzing)
+        phase_type = self._classify_phase(phase_messages, duration, mood_data)
         
         return Phase(
             start_time=start_time,
@@ -211,30 +220,39 @@ class PhaseDetector:
             phase_type=phase_type,
             dominant_sender=dominant_sender,
             message_count=len(phase_messages),
-            duration_hours=duration
+            duration_hours=duration,
+            mood=mood_data['mood'],
+            vibe=mood_data['vibe'],
+            mood_emoji=mood_data['emoji'],
+            sentiment=mood_data['sentiment']
         )
     
-    def _classify_phase(self, messages: List[Message], duration_hours: float) -> str:
-        """Classify the type of phase based on its characteristics."""
+    def _classify_phase(self, messages: List[Message], duration_hours: float, mood_data: dict = None) -> str:
+        """Classify the type of phase based on its characteristics with mood-aware descriptions."""
         if not messages:
-            return "Empty"
+            return "Silence"
         
         msg_count = len(messages)
         msg_rate = msg_count / max(duration_hours, 0.1)  # Messages per hour
         
+        # Use provided mood_data or analyze if not provided
+        if mood_data is None:
+            mood_data = self.sentiment_analyzer.analyze_phase(messages)
+        mood_prefix = mood_data['mood']
+        
         # Very high activity
         if msg_rate > 20:
-            return "High Activity"
+            return f"🔥 Intense {mood_prefix} Vibes"
         # High activity
         elif msg_rate > 10:
-            return "Active Discussion"
+            return f"💬 Active {mood_prefix} Chat"
         # Medium activity
         elif msg_rate > 3:
-            return "Regular Chat"
+            return f"✨ {mood_prefix} Conversation"
         # Low activity but messages present
         elif msg_rate > 0.5:
-            return "Casual Conversation"
+            return f"💭 Casual {mood_prefix} Check-in"
         # Very low activity
         else:
-            return "Slow Period"
+            return f"🌙 Quiet {mood_prefix} Period"
 

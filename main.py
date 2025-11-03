@@ -49,27 +49,29 @@ Examples:
         sys.exit(1)
     
     # Parse WhatsApp messages
-    print("Parsing WhatsApp messages...")
+    print("\n🔍 Analyzing your conversation...")
+    print("=" * 70)
     whatsapp_parser = WhatsAppParser()
     try:
         messages = whatsapp_parser.parse(str(input_path))
-        print(f"✓ Parsed {len(messages)} messages")
+        print(f"✨ Found {len(messages)} messages to explore")
     except Exception as e:
-        print(f"Error parsing file: {e}", file=sys.stderr)
+        print(f"❌ Error parsing file: {e}", file=sys.stderr)
         sys.exit(1)
     
     if len(messages) == 0:
-        print("Error: No messages found in file", file=sys.stderr)
+        print("❌ No messages found in file", file=sys.stderr)
         sys.exit(1)
     
     # Display conversation info
     participants = whatsapp_parser.get_participants()
     start_time, end_time = whatsapp_parser.get_time_span()
-    print(f"✓ Participants: {', '.join(participants)}")
-    print(f"✓ Time span: {start_time.strftime('%Y-%m-%d %H:%M')} to {end_time.strftime('%Y-%m-%d %H:%M')}")
+    print(f"👥 Participants: {', '.join(participants)}")
+    print(f"📅 Timeline: {start_time.strftime('%b %d, %Y at %H:%M')} → {end_time.strftime('%b %d, %Y at %H:%M')}")
     
     # Detect phases
-    print(f"\nDetecting phases using method: {args.method}...")
+    print(f"\n🎭 Detecting conversation vibes...")
+    print("=" * 70)
     phase_detector = PhaseDetector(messages)
     try:
         phases = phase_detector.detect_phases(
@@ -77,26 +79,32 @@ Examples:
             min_messages_per_phase=args.min_messages,
             method=args.method
         )
-        print(f"✓ Detected {len(phases)} phases")
+        print(f"✨ Discovered {len(phases)} distinct conversation phases!\n")
     except Exception as e:
-        print(f"Error detecting phases: {e}", file=sys.stderr)
+        print(f"❌ Error detecting phases: {e}", file=sys.stderr)
         sys.exit(1)
     
-    # Display phase information
-    print("\nPhase Summary:")
-    print("-" * 80)
+    # Display phase information with mood and emojis
+    print("📊 CONVERSATION PHASES")
+    print("=" * 70)
     for i, phase in enumerate(phases, 1):
-        print(f"\nPhase {i}: {phase.phase_type}")
-        print(f"  Period: {phase.start_time.strftime('%Y-%m-%d %H:%M')} to "
-              f"{phase.end_time.strftime('%Y-%m-%d %H:%M')}")
-        print(f"  Duration: {phase.duration_hours:.2f} hours")
-        print(f"  Messages: {phase.message_count}")
-        print(f"  Dominant sender: {phase.dominant_sender}")
-        print(f"  Rate: {phase.message_count / max(phase.duration_hours, 0.1):.2f} msg/hour")
+        duration_days = phase.duration_hours / 24
+        duration_str = f"{duration_days:.1f} days" if duration_days >= 1 else f"{phase.duration_hours:.1f} hours"
+        
+        print(f"\n{phase.mood_emoji} Phase {i}: {phase.phase_type}")
+        print(f"   🎭 Vibe: {phase.vibe}")
+        print(f"   📅 When: {phase.start_time.strftime('%b %d, %Y')} ({duration_str})")
+        print(f"   💬 Messages: {phase.message_count}")
+        print(f"   👤 Most active: {phase.dominant_sender}")
+        print(f"   ⚡ Energy: {phase.message_count / max(phase.duration_hours, 0.1):.1f} messages/hour")
+        sentiment_emoji = "😊" if phase.sentiment > 0.1 else "😐" if phase.sentiment > -0.1 else "😔"
+        print(f"   {sentiment_emoji} Mood score: {phase.sentiment:+.2f}")
     
     # Create visualizations
     if phases:
-        print("\nGenerating visualizations...")
+        print("\n" + "=" * 70)
+        print("🎨 Creating beautiful visualizations...")
+        print("=" * 70)
         visualizer = ConversationVisualizer(messages, phases)
         
         output_dir = Path(args.output) if args.output else Path.cwd()
@@ -109,28 +117,30 @@ Examples:
                 save_path = str(output_dir / f"{base_name}_timeline.png") if args.no_display else None
                 visualizer.plot_phases_timeline(save_path=save_path)
                 if save_path:
-                    print(f"✓ Saved timeline visualization")
+                    print(f"💾 Saved timeline visualization → {save_path}")
             
             if args.visualize in ['stats', 'all']:
                 save_path = str(output_dir / f"{base_name}_statistics.png") if args.no_display else None
                 visualizer.plot_phase_statistics(save_path=save_path)
                 if save_path:
-                    print(f"✓ Saved statistics visualization")
+                    print(f"💾 Saved statistics visualization → {save_path}")
             
             if args.visualize in ['summary', 'all']:
                 save_path = str(output_dir / f"{base_name}_summary.png") if args.no_display else None
                 visualizer.plot_phase_summary(save_path=save_path)
                 if save_path:
-                    print(f"✓ Saved summary visualization")
+                    print(f"💾 Saved summary visualization → {save_path}")
             
-            print("\n✓ Analysis complete!")
+            print("\n" + "=" * 70)
+            print("✨ Analysis complete! Your conversation vibes have been captured!")
+            print("=" * 70 + "\n")
             
         except Exception as e:
-            print(f"Error creating visualizations: {e}", file=sys.stderr)
+            print(f"❌ Error creating visualizations: {e}", file=sys.stderr)
             import traceback
             traceback.print_exc()
     else:
-        print("\nNo phases detected for visualization.")
+        print("\n😶 No phases detected for visualization.")
 
 
 if __name__ == '__main__':
