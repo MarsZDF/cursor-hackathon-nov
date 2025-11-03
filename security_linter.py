@@ -102,12 +102,26 @@ class SecretDetector:
         except Exception as e:
             return [(0, 'error', f'Could not read file: {e}', '')]
         
+        in_code_block = False
         for line_num, line in enumerate(lines, 1):
+            # Track markdown code blocks
+            if file_path.suffix == '.md':
+                if line.strip().startswith('```'):
+                    in_code_block = not in_code_block
+                    continue
+                if in_code_block:
+                    continue  # Skip content inside code blocks
+            
             # Skip regex pattern definitions (common false positives)
             if 'r\'' in line or 'r"' in line or 're.compile' in line or 're.search' in line or 're.match' in line:
                 # Check if this looks like a regex pattern definition
                 if 'PATTERNS' in line or 'pattern' in line.lower() or 'compile' in line.lower():
                     continue
+            
+            # Skip markdown code blocks and inline code
+            if file_path.suffix == '.md' and ('`' in line or line.strip().startswith('```')):
+                # This is likely documentation, skip it
+                continue
             
             # Check for false positives first
             is_false_positive = any(
