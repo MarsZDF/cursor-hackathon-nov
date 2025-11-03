@@ -24,7 +24,7 @@ class WhatsAppParser:
     
     # Pattern for standard WhatsApp format: [DD/MM/YYYY, HH:MM:SS AM/PM] Sender: Message
     # Also handles 24-hour format: [DD/MM/YYYY, HH:MM:SS] Sender: Message
-    # Also handles 2-digit year format: [DD/MM/YY, HH:MM:SS AM/PM] Sender: Message
+    # Also handles 2-digit year format: [M/D/YY, HH:MM:SS AM/PM] Sender: Message
     MESSAGE_PATTERN = re.compile(
         r'\[(\d{1,2}/\d{1,2}/(\d{2}|\d{4})),\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*(AM|PM)?\]\s*(.+?):\s*(.+)$',
         re.MULTILINE
@@ -117,17 +117,17 @@ class WhatsAppParser:
         if am_pm is None:
             # Check if seconds are included
             if len(time_str.split(':')) == 3:
-                format_str = '%d/%m/%Y, %H:%M:%S'
+                format_str = '%m/%d/%Y, %H:%M:%S'
             else:
-                format_str = '%d/%m/%Y, %H:%M'
+                format_str = '%m/%d/%Y, %H:%M'
             return datetime.strptime(f'{date_str}, {time_str}', format_str)
         
         # Handle 12-hour format (with AM/PM)
         time_with_am_pm = f'{time_str} {am_pm}'
         if len(time_str.split(':')) == 3:
-            format_str = '%d/%m/%Y, %I:%M:%S %p'
+            format_str = '%m/%d/%Y, %I:%M:%S %p'
         else:
-            format_str = '%d/%m/%Y, %I:%M %p'
+            format_str = '%m/%d/%Y, %I:%M %p'
         
         return datetime.strptime(f'{date_str}, {time_with_am_pm}', format_str)
     
