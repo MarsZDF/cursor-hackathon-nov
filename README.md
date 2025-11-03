@@ -24,6 +24,16 @@ A Python tool to parse WhatsApp exported conversations, identify distinct phases
 pip install -r requirements.txt
 ```
 
+3. (Optional) Set up security linting to prevent committing secrets:
+```bash
+# Run security linter manually
+python security_linter.py .
+
+# Or install pre-commit hooks (requires pre-commit package)
+pip install pre-commit
+pre-commit install
+```
+
 ## Usage
 
 ### Basic Usage
@@ -137,6 +147,41 @@ Phase 1: Regular Chat
 
 See LICENSE file for details.
 
+## Security
+
+### Secret Detection
+
+This repository includes a security linter to prevent accidentally committing secrets, passwords, tokens, and API keys.
+
+**Run manually:**
+```bash
+python security_linter.py .
+```
+
+**What it checks for:**
+- API keys (`api_key`, `apikey`)
+- Passwords (`password`, `pwd`, `passwd`)
+- Tokens (`token`, `access_token`, `bearer_token`)
+- Secret keys (`secret_key`, `private_key`)
+- AWS credentials (`aws_access_key_id`, `aws_secret_access_key`)
+- GitHub tokens (`github_token`)
+- Private keys (PEM format)
+- Database URLs (`postgresql://`, `mysql://`, `mongodb://`)
+- Email passwords (`email_password`, `smtp_password`)
+
+The linter automatically ignores:
+- Placeholder values (`your_api_key`, `example_password`)
+- Type annotations (`password: str`)
+- Empty assignments (`password = ""`)
+- The security linter file itself
+
+**Pre-commit hook:**
+To automatically run the security linter before each commit:
+```bash
+pip install pre-commit
+pre-commit install
+```
+
 ## Troubleshooting
 
 **Issue**: "No messages found in file"
@@ -152,4 +197,9 @@ See LICENSE file for details.
 **Issue**: Visualization errors
 - Ensure matplotlib is properly installed: `pip install matplotlib`
 - If running on a server without display, use `--no-display` flag
+
+**Issue**: Security linter detects false positives
+- Check if the detected value is actually a secret or just example code
+- Use placeholder indicators like `your_api_key` or `example_password` to skip detection
+- For regex patterns, the linter automatically skips them
 

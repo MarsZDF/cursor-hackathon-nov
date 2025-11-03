@@ -1,0 +1,15 @@
+# Pre-commit hooks configuration
+# Install with: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: local
+    hooks:
+      - id: security-lint
+        name: Security Linter (Detect Secrets)
+        entry: python security_linter.py
+        language: system
+        args: ['--exit-error', '--verbose']
+        pass_filenames: false
+        always_run: true
+        stages: [commit]
+
