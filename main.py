@@ -5,6 +5,7 @@ Usage: python main.py <whatsapp_export_file.txt> [options]
 
 import argparse
 import sys
+import os
 from pathlib import Path
 from whatsapp_parser import WhatsAppParser
 from phase_detector import PhaseDetector
@@ -42,10 +43,29 @@ Examples:
     
     args = parser.parse_args()
     
-    # Validate input file
-    input_path = Path(args.input_file)
-    if not input_path.exists():
-        print(f"Error: File not found: {args.input_file}", file=sys.stderr)
+    # Validate and sanitize input file path
+    try:
+        input_path = Path(args.input_file).resolve()
+        # Prevent path traversal by ensuring the resolved path is within allowed directory
+        # Check if file exists
+        if not input_path.exists():
+            print(f"❌ Error: File not found: {args.input_file}", file=sys.stderr)
+            sys.exit(1)
+        
+        # Check if it's actually a file (not a directory)
+        if not input_path.is_file():
+            print(f"❌ Error: Path is not a file: {args.input_file}", file=sys.stderr)
+            sys.exit(1)
+        
+        # Check file size (limit to 100MB to prevent DoS)
+        max_file_size = 100 * 1024 * 1024  # 100MB
+        file_size = input_path.stat().st_size
+        if file_size > max_file_size:
+            print(f"❌ Error: File too large ({file_size / (1024*1024):.1f}MB). Maximum size is 100MB.", file=sys.stderr)
+            sys.exit(1)
+            
+    except (ValueError, OSError) as e:
+        print(f"❌ Error: Invalid file path: {e}", file=sys.stderr)
         sys.exit(1)
     
     # Parse WhatsApp messages
@@ -107,10 +127,28 @@ Examples:
         print("=" * 70)
         visualizer = ConversationVisualizer(messages, phases)
         
-        output_dir = Path(args.output) if args.output else Path.cwd()
-        output_dir.mkdir(parents=True, exist_ok=True)
+        # Validate and sanitize output directory
+        if args.output:
+            try:
+                output_dir = Path(args.output).resolve()
+                # Prevent path traversal - ensure output stays within current directory tree
+                # or at least doesn't escape to system directories
+                if '..' in str(output_dir) and not str(output_dir).startswith(str(Path.cwd().resolve())):
+                    print(f"❌ Error: Output directory path not allowed", file=sys.stderr)
+                    sys.exit(1)
+                output_dir.mkdir(parents=True, exist_ok=True)
+            except (ValueError, OSError) as e:
+                print(f"❌ Error: Invalid output directory: {e}", file=sys.stderr)
+                sys.exit(1)
+        else:
+            output_dir = Path.cwd()
         
+        # Sanitize base name to prevent path injection
         base_name = input_path.stem
+        # Remove any potentially dangerous characters from filename
+        base_name = "".join(c for c in base_name if c.isalnum() or c in ('-', '_')).strip()
+        if not base_name:
+            base_name = "chat"  # Default if sanitization removes everything
         
         try:
             if args.visualize in ['timeline', 'all']:

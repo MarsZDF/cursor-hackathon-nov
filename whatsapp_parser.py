@@ -4,6 +4,7 @@ Parses WhatsApp exported chat files and extracts structured message data.
 """
 
 import re
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 from dataclasses import dataclass
@@ -34,18 +35,32 @@ class WhatsAppParser:
     def __init__(self):
         self.messages: List[Message] = []
     
-    def parse(self, file_path: str) -> List[Message]:
+    def parse(self, file_path: str, max_file_size: int = 100 * 1024 * 1024) -> List[Message]:
         """
         Parse a WhatsApp exported chat file.
         
         Args:
             file_path: Path to the exported WhatsApp chat file
+            max_file_size: Maximum file size in bytes (default: 100MB)
             
         Returns:
             List of Message objects
+            
+        Raises:
+            ValueError: If file is too large
+            IOError: If file cannot be read
         """
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
+        # Validate file size before reading
+        file_size = os.path.getsize(file_path)
+        if file_size > max_file_size:
+            raise ValueError(f"File too large: {file_size / (1024*1024):.1f}MB (max: {max_file_size / (1024*1024):.1f}MB)")
+        
+        # Read file with encoding error handling
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+        except UnicodeDecodeError:
+            raise ValueError("File encoding error: file may not be a valid text file")
         
         messages = []
         lines = content.split('\n')
