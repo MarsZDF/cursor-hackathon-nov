@@ -329,4 +329,218 @@ class ConversationVisualizer:
             print(f"Summary visualization saved to {save_path}")
         else:
             plt.show()
+    
+    def plot_usage_insights(self, figsize: tuple = (16, 10), save_path: Optional[str] = None):
+        """
+        Create a user-friendly visualization showing usage patterns and insights.
+        Perfect for casual users to understand their messaging habits.
+        """
+        if not self.messages:
+            print("No messages to visualize")
+            return
+        
+        fig = plt.figure(figsize=figsize, facecolor='white')
+        gs = fig.add_gridspec(2, 2, hspace=0.35, wspace=0.3)
+        
+        # 1. Peak Activity Hours (Top Left)
+        ax1 = fig.add_subplot(gs[0, 0])
+        self._plot_peak_hours(ax1)
+        
+        # 2. Day of Week Activity (Top Right)
+        ax2 = fig.add_subplot(gs[0, 1])
+        self._plot_day_of_week_activity(ax2)
+        
+        # 3. Activity Heatmap (Bottom Left)
+        ax3 = fig.add_subplot(gs[1, 0])
+        self._plot_activity_heatmap(ax3)
+        
+        # 4. Quick Stats (Bottom Right)
+        ax4 = fig.add_subplot(gs[1, 1])
+        self._plot_quick_stats(ax4)
+        
+        fig.suptitle('📱 Your WhatsApp Usage Insights', fontsize=18, weight='bold', 
+                    color='#2C3E50', y=0.98)
+        
+        plt.tight_layout(rect=[0, 0, 1, 0.96])
+        
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
+            print(f"Usage insights visualization saved to {save_path}")
+        else:
+            plt.show()
+    
+    def _plot_peak_hours(self, ax):
+        """Plot message activity by hour of day."""
+        hour_counts = defaultdict(int)
+        for msg in self.messages:
+            if not msg.is_system:
+                hour = msg.timestamp.hour
+                hour_counts[hour] += 1
+        
+        hours = sorted(hour_counts.keys())
+        counts = [hour_counts[h] for h in hours]
+        
+        colors = plt.cm.YlOrRd(np.linspace(0.4, 1, len(hours)))
+        bars = ax.bar(hours, counts, color=colors, alpha=0.8, edgecolor='white', linewidth=1.5)
+        
+        # Highlight peak hour
+        if counts:
+            max_idx = counts.index(max(counts))
+            bars[max_idx].set_color('#FF6B6B')
+            bars[max_idx].set_edgecolor('#2C3E50')
+            bars[max_idx].set_linewidth(2.5)
+            bars[max_idx].set_alpha(1.0)
+        
+        ax.set_xlabel('Hour of Day', fontsize=11, weight='bold', color='#34495E')
+        ax.set_ylabel('Messages', fontsize=11, weight='bold', color='#34495E')
+        ax.set_title('⏰ Peak Activity Hours', fontsize=13, weight='bold', 
+                    pad=15, color='#2C3E50')
+        ax.set_xticks(range(0, 24, 2))
+        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 2)], rotation=45, ha='right')
+        ax.grid(True, alpha=0.2, axis='y', linestyle='--')
+        ax.set_facecolor('#FAFAFA')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        # Add value labels on bars
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}', ha='center', va='bottom', 
+                       fontweight='bold', fontsize=9)
+    
+    def _plot_day_of_week_activity(self, ax):
+        """Plot message activity by day of week."""
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        day_counts = defaultdict(int)
+        
+        for msg in self.messages:
+            if not msg.is_system:
+                day = msg.timestamp.weekday()  # 0=Monday, 6=Sunday
+                day_counts[day] += 1
+        
+        days = list(range(7))
+        counts = [day_counts[d] for d in days]
+        
+        colors = ['#FF6B6B' if counts[i] == max(counts) else '#4ECDC4' 
+                 for i in range(7)]
+        
+        bars = ax.bar(day_names, counts, color=colors, alpha=0.8, 
+                     edgecolor='white', linewidth=2)
+        
+        ax.set_xlabel('Day of Week', fontsize=11, weight='bold', color='#34495E')
+        ax.set_ylabel('Messages', fontsize=11, weight='bold', color='#34495E')
+        ax.set_title('📅 Most Active Days', fontsize=13, weight='bold', 
+                    pad=15, color='#2C3E50')
+        ax.grid(True, alpha=0.2, axis='y', linestyle='--')
+        ax.set_facecolor('#FAFAFA')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        
+        # Add value labels
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                       f'{int(height)}', ha='center', va='bottom', 
+                       fontweight='bold', fontsize=10)
+    
+    def _plot_activity_heatmap(self, ax):
+        """Create a heatmap showing activity by day of week and hour of day."""
+        # Initialize 7x24 grid (days x hours)
+        heatmap_data = np.zeros((7, 24))
+        
+        for msg in self.messages:
+            if not msg.is_system:
+                day = msg.timestamp.weekday()  # 0=Monday
+                hour = msg.timestamp.hour
+                heatmap_data[day, hour] += 1
+        
+        # Create heatmap
+        im = ax.imshow(heatmap_data, cmap='YlOrRd', aspect='auto', 
+                      interpolation='nearest', alpha=0.9)
+        
+        # Set labels
+        day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        ax.set_xticks(range(0, 24, 2))
+        ax.set_xticklabels([f'{h:02d}:00' for h in range(0, 24, 2)])
+        ax.set_yticks(range(7))
+        ax.set_yticklabels(day_names)
+        
+        ax.set_xlabel('Hour of Day', fontsize=11, weight='bold', color='#34495E')
+        ax.set_ylabel('Day of Week', fontsize=11, weight='bold', color='#34495E')
+        ax.set_title('🔥 Activity Heatmap', fontsize=13, weight='bold', 
+                    pad=15, color='#2C3E50')
+        
+        # Add colorbar
+        cbar = plt.colorbar(im, ax=ax, shrink=0.8)
+        cbar.set_label('Messages', fontsize=10, weight='bold')
+        
+        # Rotate x-axis labels
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
+    def _plot_quick_stats(self, ax):
+        """Display quick statistics in a clean format."""
+        ax.axis('off')
+        
+        # Calculate stats
+        total_messages = len([m for m in self.messages if not m.is_system])
+        total_phases = len(self.phases)
+        
+        # Calculate time span
+        if self.messages:
+            timestamps = [m.timestamp for m in self.messages if not m.is_system]
+            time_span = (max(timestamps) - min(timestamps)).days
+            if time_span == 0:
+                time_span_text = "Less than 1 day"
+            elif time_span == 1:
+                time_span_text = "1 day"
+            else:
+                time_span_text = f"{time_span} days"
+        else:
+            time_span_text = "N/A"
+        
+        # Calculate average messages per day
+        if time_span > 0:
+            avg_per_day = total_messages / time_span
+        else:
+            avg_per_day = total_messages
+        
+        # Find most active participant
+        participant_counts = defaultdict(int)
+        for msg in self.messages:
+            if not msg.is_system:
+                participant_counts[msg.sender] += 1
+        
+        most_active = max(participant_counts.items(), key=lambda x: x[1])[0] if participant_counts else "N/A"
+        
+        # Find peak hour
+        hour_counts = defaultdict(int)
+        for msg in self.messages:
+            if not msg.is_system:
+                hour_counts[msg.timestamp.hour] += 1
+        
+        peak_hour = max(hour_counts.items(), key=lambda x: x[1])[0] if hour_counts else "N/A"
+        peak_hour_text = f"{peak_hour:02d}:00" if isinstance(peak_hour, int) else "N/A"
+        
+        # Create text display
+        stats_text = f"""
+📊 Quick Stats
+
+💬 Total Messages: {total_messages:,}
+📅 Conversation Span: {time_span_text}
+📈 Messages/Day: {avg_per_day:.1f}
+👤 Most Active: {most_active}
+⏰ Peak Hour: {peak_hour_text}
+🎭 Conversation Phases: {total_phases}
+        """
+        
+        ax.text(0.1, 0.5, stats_text, fontsize=13, weight='bold',
+               verticalalignment='center', family='monospace',
+               color='#2C3E50', bbox=dict(boxstyle='round,pad=1',
+               facecolor='#F8F9FA', edgecolor='#E0E0E0', linewidth=2))
+        
+        ax.set_title('📈 Conversation Overview', fontsize=13, weight='bold', 
+                    pad=15, color='#2C3E50')
 

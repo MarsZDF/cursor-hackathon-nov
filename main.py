@@ -10,6 +10,7 @@ from pathlib import Path
 from whatsapp_parser import WhatsAppParser
 from phase_detector import PhaseDetector
 from visualizer import ConversationVisualizer
+from activity_visualizer import ActivityVisualizer
 
 
 def main():
@@ -36,7 +37,7 @@ Examples:
     parser.add_argument('--output', type=str, default=None,
                        help='Output directory for visualizations (default: current directory)')
     parser.add_argument('--visualize', type=str, default='summary',
-                       choices=['timeline', 'stats', 'summary', 'all'],
+                       choices=['timeline', 'stats', 'summary', 'insights', 'activity', 'all'],
                        help='Type of visualization to generate (default: summary)')
     parser.add_argument('--no-display', action='store_true',
                        help='Save visualizations without displaying them')
@@ -171,6 +172,19 @@ Examples:
                 visualizer.plot_phase_summary(save_path=save_path)
                 if save_path:
                     print(f"💾 Saved summary visualization → {save_path}")
+            
+            if args.visualize in ['insights', 'all']:
+                save_path = str(output_dir / f"{base_name}_insights.png") if args.no_display else None
+                visualizer.plot_usage_insights(save_path=save_path)
+                if save_path:
+                    print(f"💾 Saved usage insights visualization → {save_path}")
+            
+            if args.visualize in ['activity', 'all']:
+                activity_visualizer = ActivityVisualizer(messages)
+                save_path = str(output_dir / f"{base_name}_activity.png") if args.no_display else None
+                activity_visualizer.plot_activity_patterns(save_path=save_path)
+                if save_path:
+                    print(f"💾 Saved activity patterns visualization → {save_path}")
             
             print("\n" + "=" * 70)
             print("✨ Analysis complete! Your conversation vibes have been captured!")
