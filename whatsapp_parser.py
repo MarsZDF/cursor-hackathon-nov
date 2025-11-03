@@ -24,8 +24,9 @@ class WhatsAppParser:
     
     # Pattern for standard WhatsApp format: [DD/MM/YYYY, HH:MM:SS AM/PM] Sender: Message
     # Also handles 24-hour format: [DD/MM/YYYY, HH:MM:SS] Sender: Message
+    # Also handles 2-digit year format: [DD/MM/YY, HH:MM:SS AM/PM] Sender: Message
     MESSAGE_PATTERN = re.compile(
-        r'\[(\d{1,2}/\d{1,2}/\d{4}),\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*(AM|PM)?\]\s*(.+?):\s*(.+)$',
+        r'\[(\d{1,2}/\d{1,2}/(\d{2}|\d{4})),\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*(AM|PM)?\]\s*(.+?):\s*(.+)$',
         re.MULTILINE
     )
     
@@ -79,8 +80,8 @@ class WhatsAppParser:
                     messages.append(current_message)
                 
                 # Parse new message
-                date_str, time_str, am_pm, sender, content = match.groups()
-                timestamp = self._parse_timestamp(date_str, time_str, am_pm)
+                date_str, year_part, time_str, am_pm, sender, content = match.groups()
+                timestamp = self._parse_timestamp(date_str, time_str, am_pm, year_part)
                 
                 current_message = Message(
                     timestamp=timestamp,
@@ -99,8 +100,19 @@ class WhatsAppParser:
         self.messages = messages
         return messages
     
-    def _parse_timestamp(self, date_str: str, time_str: str, am_pm: Optional[str]) -> datetime:
+    def _parse_timestamp(self, date_str: str, time_str: str, am_pm: Optional[str], year_part: str) -> datetime:
         """Parse timestamp string into datetime object."""
+        # Convert 2-digit year to 4-digit year (assume 00-50 = 2000-2050, 51-99 = 1951-1999)
+        if len(year_part) == 2:
+            year_int = int(year_part)
+            if year_int <= 50:
+                full_year = 2000 + year_int
+            else:
+                full_year = 1900 + year_int
+            # Replace 2-digit year with 4-digit year in date string
+            date_parts = date_str.rsplit('/', 1)
+            date_str = f'{date_parts[0]}/{full_year}'
+        
         # Handle 24-hour format (no AM/PM)
         if am_pm is None:
             # Check if seconds are included

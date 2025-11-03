@@ -113,10 +113,13 @@ Examples:
         
         print(f"\n{phase.mood_emoji} Phase {i}: {phase.phase_type}")
         print(f"   🎭 Vibe: {phase.vibe}")
+        if phase.summary_sentence:
+            print(f"   📝 Summary: {phase.summary_sentence}")
         print(f"   📅 When: {phase.start_time.strftime('%b %d, %Y')} ({duration_str})")
         print(f"   💬 Messages: {phase.message_count}")
         print(f"   👤 Most active: {phase.dominant_sender}")
         print(f"   ⚡ Energy: {phase.message_count / max(phase.duration_hours, 0.1):.1f} messages/hour")
+        print(f"   📝 Avg message length: {phase.avg_message_length:.1f} characters")
         sentiment_emoji = "😊" if phase.sentiment > 0.1 else "😐" if phase.sentiment > -0.1 else "😔"
         print(f"   {sentiment_emoji} Mood score: {phase.sentiment:+.2f}")
     
