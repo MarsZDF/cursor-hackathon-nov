@@ -117,6 +117,93 @@ class ConversationVisualizer:
         ax.spines['left'].set_visible(False)
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right', fontsize=9)
     
+    def _plot_phase_list(self, ax):
+        """Plot phases as a multi-column list with one-sentence summaries."""
+        if not self.phases:
+            ax.text(0.5, 0.5, 'No phases detected', ha='center', va='center', 
+                   transform=ax.transAxes, fontsize=14)
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            return
+        
+        ax.set_facecolor('#F5F5F5')
+        ax.axis('off')  # Remove axes for clean list display
+        
+        # Calculate number of columns based on number of phases
+        num_phases = len(self.phases)
+        if num_phases <= 6:
+            num_cols = 2
+        elif num_phases <= 12:
+            num_cols = 3
+        else:
+            num_cols = 4
+        
+        num_rows = (num_phases + num_cols - 1) // num_cols  # Ceiling division
+        
+        # Calculate spacing with padding
+        col_width = 0.92 / num_cols
+        row_height = 0.88 / num_rows
+        
+        # Plot each phase
+        for idx, phase in enumerate(self.phases):
+            col = idx % num_cols
+            row = idx // num_cols
+            
+            # Calculate position (from top-left, going left to right, top to bottom)
+            x_pos = 0.04 + col * col_width + col_width * 0.05
+            y_pos = 0.93 - (row + 1) * row_height + row_height * 0.12
+            
+            # Get summary sentence
+            summary = phase.summary_sentence if phase.summary_sentence else "General conversation period."
+            
+            # Truncate if too long (keep it to one sentence)
+            if len(summary) > 120:
+                # Find last complete sentence
+                sentences = summary.split('.')
+                if len(sentences) > 1:
+                    summary = '.'.join(sentences[:1]) + '.'
+                else:
+                    summary = summary[:117] + '...'
+            
+            # Format phase number and date
+            duration_days = phase.duration_hours / 24
+            if duration_days >= 1:
+                duration_str = f"{duration_days:.1f} days"
+            else:
+                duration_str = f"{phase.duration_hours:.1f} hours"
+            
+            date_str = phase.start_time.strftime('%b %d, %Y')
+            
+            # Create phase text
+            phase_text = f"{phase.mood_emoji} Phase {idx+1}: {date_str} ({duration_str})\n"
+            phase_text += f"💬 {phase.message_count} messages\n"
+            phase_text += f"📝 {summary}"
+            
+            # Add colored box background
+            color = self.colors[idx % len(self.colors)]
+            box_height = row_height * 0.75
+            rect = Rectangle((x_pos - 0.015, y_pos - box_height), 
+                           col_width * 0.85, box_height,
+                           facecolor=color, edgecolor='white', 
+                           alpha=0.25, linewidth=1.5, transform=ax.transAxes)
+            ax.add_patch(rect)
+            
+            # Add text
+            ax.text(x_pos, y_pos, phase_text, 
+                   transform=ax.transAxes,
+                   fontsize=8.5, weight='normal',
+                   color='#2C3E50',
+                   verticalalignment='top',
+                   bbox=dict(boxstyle='round,pad=0.4', 
+                            facecolor='white', alpha=0.95, 
+                            edgecolor=color, linewidth=1.5))
+        
+        # Add title
+        ax.text(0.5, 0.98, '📊 Conversation Phases', 
+               transform=ax.transAxes,
+               ha='center', va='top',
+               fontsize=16, weight='bold', color='#2C3E50')
+    
     def _plot_message_activity(self, ax):
         """Plot message activity as aggregated daily counts over time with mood shading."""
         if not self.messages:
@@ -255,8 +342,8 @@ class ConversationVisualizer:
         ax3b = fig.add_subplot(gs[2, 1])  # Activity heatmap (right)
         ax4 = fig.add_subplot(gs[3, :])  # Activity timeline (full width)
         
-        # Phase timeline
-        self._plot_phase_timeline(ax1)
+        # Phase list (multi-column)
+        self._plot_phase_list(ax1)
         
         # Mood scatter plot (pleasant-unpleasant vs energy)
         if self.phases:

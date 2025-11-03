@@ -354,37 +354,17 @@ class PhaseDetector:
         if not messages:
             return "No messages in this phase."
         
-        # Get key phrases from messages - look for meaningful sentences
-        # Get ALL participant names from entire conversation for better filtering
-        participant_names = set()
-        for msg in self.messages:
-            if not msg.is_system:
-                name_parts = msg.sender.lower().split()
-                participant_names.update(name_parts)
-                # Also add full name without spaces
-                full_name = msg.sender.lower().replace(' ', '')
-                if full_name:
-                    participant_names.add(full_name)
-        
-        # Extract sentences with keywords
-        sentences_with_keywords = []
+        # Analyze message content to identify main themes and activities
+        # Collect all meaningful content (excluding system messages and very short messages)
+        meaningful_content = []
         for msg in messages:
-            if msg.is_system or len(msg.content.strip()) < 10:
-                continue
-            content = msg.content
-            # Simple sentence splitting
-            sentences = re.split(r'[.!?]+', content)
-            for sentence in sentences:
-                sentence = sentence.strip()
-                if len(sentence) < 15 or len(sentence) > 150:
-                    continue
-                # Check if sentence contains any keywords
-                sentence_lower = sentence.lower()
-                if any(kw in sentence_lower for kw in keywords[:3] if keywords):
-                    sentences_with_keywords.append(sentence)
+            if not msg.is_system and len(msg.content.strip()) > 5:
+                meaningful_content.append(msg.content.strip())
         
-        # Try to create a summary
-        # Add mood/activity context
+        if not meaningful_content:
+            return "Limited conversation activity."
+        
+        # Determine activity level
         if msg_rate > 15:
             activity = "intense"
         elif msg_rate > 8:
@@ -394,6 +374,7 @@ class PhaseDetector:
         else:
             activity = "casual"
         
+        # Determine tone
         sentiment_val = mood_data.get('sentiment', 0.0)
         if sentiment_val > 0.2:
             tone = "positive"
@@ -402,81 +383,133 @@ class PhaseDetector:
         else:
             tone = "neutral"
         
-        # Build summary using keywords
-        if keywords:
-            # Use top 2-3 keywords to form a sentence
-            main_keywords = keywords[:3]
+        # Analyze what was actually discussed using keywords and patterns
+        # Look for common themes, activities, and topics
+        if keywords and len(keywords) >= 2:
+            # Use keywords to understand the main topics
+            main_topics = keywords[:2]
             
-            # Simple template-based generation (ensure 10-20 words)
-            if len(main_keywords) >= 2:
-                templates = [
-                    f"This was an {activity} {tone} conversation about {main_keywords[0]} and {main_keywords[1]}.",
-                    f"Discussion centered on {main_keywords[0]} with {tone} {activity} messaging.",
-                    f"Main topics included {main_keywords[0]} and {main_keywords[1]} in {tone} {activity} exchange.",
-                    f"The conversation focused on {main_keywords[0]} during this {activity} {tone} period.",
-                    f"This phase featured {main_keywords[0]} and {main_keywords[1]} in {activity} {tone} discussion."
-                ]
+            # Build a summary that reflects actual content
+            # Try to create a natural summary sentence
+            if len(main_topics) == 2:
+                # Create summary based on actual topics discussed
+                summary = f"Discussed {main_topics[0]} and {main_topics[1]} during this {activity} {tone} conversation period."
             else:
-                templates = [
-                    f"This was an {activity} {tone} conversation about {main_keywords[0] if main_keywords else 'various topics'}.",
-                    f"Discussion centered on {main_keywords[0] if main_keywords else 'topics'} with {tone} {activity} messaging.",
-                    f"Main topic was {main_keywords[0] if main_keywords else 'conversation'} in {tone} {activity} exchange.",
-                    f"The conversation focused on {main_keywords[0] if main_keywords else 'topics'} during {activity} {tone} period."
-                ]
-            
-            # Try to find a sentence from actual messages that contains keywords
-            if sentences_with_keywords:
-                # Pick a representative sentence (prefer medium length)
-                candidate = None
-                for s in sentences_with_keywords[:10]:
-                    word_count = len(s.split())
-                    if 8 <= word_count <= 25:
-                        candidate = s
-                        break
-                
-                if candidate:
-                    # Clean up and use it, but ensure it's within word limit
-                    candidate = candidate.strip()
-                    candidate_words = candidate.split()
-                    if 10 <= len(candidate_words) <= 20:
-                        return candidate
-                    elif len(candidate_words) > 20:
-                        # Truncate to 20 words
-                        truncated = ' '.join(candidate_words[:20])
-                        if not truncated[-1] in '.!?':
-                            truncated += '.'
-                        return truncated
-                    else:
-                        # Too short, use template
-                        summary = templates[0] if len(templates) > 0 else f"Discussion about {', '.join(main_keywords[:2])}."
-                else:
-                    summary = templates[0] if len(templates) > 0 else f"Discussion about {', '.join(main_keywords[:2])}."
-            else:
-                summary = templates[0] if len(templates) > 0 else f"Discussion about {', '.join(main_keywords[:2])}."
+                summary = f"Focused on {main_topics[0]} in this {activity} {tone} conversation."
+        elif keywords and len(keywords) == 1:
+            # Single main topic
+            summary = f"Main topic was {keywords[0]} in this {activity} {tone} conversation."
         else:
-            summary = f"This was an {activity} {tone} conversation period."
+            # No strong keywords, use general description
+            summary = f"This was an {activity} {tone} conversation period with various topics."
+        
+        # Refine summary based on actual message patterns
+        # Look for common action verbs or activities mentioned
+        action_patterns = {
+            'travel': ['flight', 'travel', 'trip', 'airport', 'hotel', 'visit', 'going', 'leaving', 'arriving'],
+            'work': ['work', 'meeting', 'project', 'deadline', 'office', 'job', 'boss', 'colleague'],
+            'health': ['health', 'doctor', 'appointment', 'feeling', 'sick', 'better', 'pain', 'medical'],
+            'plans': ['plan', 'planning', 'schedule', 'organize', 'arrange', 'decide', 'decided'],
+            'events': ['event', 'party', 'celebration', 'birthday', 'wedding', 'dinner', 'lunch'],
+            'relationships': ['love', 'miss', 'thinking', 'together', 'family', 'friend', 'relationship'],
+            'updates': ['update', 'news', 'happened', 'change', 'changed', 'update', 'news']
+        }
+        
+        # Check which patterns appear most in messages
+        content_lower = ' '.join([c.lower() for c in meaningful_content])
+        pattern_counts = {}
+        for pattern, words in action_patterns.items():
+            count = sum(1 for word in words if word in content_lower)
+            if count > 0:
+                pattern_counts[pattern] = count
+        
+        # If we found strong patterns, incorporate them into summary
+        if pattern_counts:
+            top_pattern = max(pattern_counts.items(), key=lambda x: x[1])[0]
+            
+            # Create more specific summary based on detected pattern
+            # Filter out generic/common words that don't add meaning
+            generic_words = {'call', 'time', 'love', 'going', 'getting', 'back', 'out', 'about', 
+                           'don', 'just', 'really', 'very', 'right', 'now', 'then', 'here', 'there',
+                           'miss', 'tired', 'lovely', 'voice', 'think', 'know', 'see', 'say'}
+            
+            if top_pattern == 'travel' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if len(relevant_keywords) >= 2:
+                    summary = f"Discussed travel plans including {relevant_keywords[0]} and {relevant_keywords[1]}."
+                elif len(relevant_keywords) == 1:
+                    summary = f"Discussed travel plans and {relevant_keywords[0]}."
+                else:
+                    summary = f"Discussed travel plans and arrangements."
+            elif top_pattern == 'work' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if relevant_keywords:
+                    summary = f"Focused on work-related topics including {relevant_keywords[0]}."
+                else:
+                    summary = f"Discussed work matters and professional updates."
+            elif top_pattern == 'health' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if relevant_keywords:
+                    summary = f"Conversation centered on health matters including {relevant_keywords[0]}."
+                else:
+                    summary = f"Discussed health updates and wellbeing."
+            elif top_pattern == 'plans' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if len(relevant_keywords) >= 2:
+                    summary = f"Made plans and discussed {relevant_keywords[0]} and {relevant_keywords[1]}."
+                elif len(relevant_keywords) == 1:
+                    summary = f"Made plans regarding {relevant_keywords[0]}."
+                else:
+                    summary = f"Discussed plans and upcoming arrangements."
+            elif top_pattern == 'events' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if relevant_keywords:
+                    summary = f"Discussed events and {relevant_keywords[0]}."
+                else:
+                    summary = f"Discussed events and social activities."
+            elif top_pattern == 'relationships':
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if relevant_keywords:
+                    summary = f"Conversation focused on personal matters and {relevant_keywords[0]}."
+                else:
+                    summary = f"Exchanged personal updates and stayed connected."
+            elif top_pattern == 'updates' and keywords:
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if len(relevant_keywords) >= 2:
+                    summary = f"Exchanged updates about {relevant_keywords[0]} and {relevant_keywords[1]}."
+                elif len(relevant_keywords) == 1:
+                    summary = f"Exchanged updates about {relevant_keywords[0]}."
+                else:
+                    summary = f"Shared updates and caught up on recent activities."
         
         # Ensure word count is between 10-20 words
         words = summary.split()
         if len(words) < 10:
-            # Add more context
+            # Add more context naturally, but only if summary is too short
+            generic_words = {'call', 'time', 'love', 'going', 'getting', 'back', 'out', 'about', 
+                           'don', 'just', 'really', 'very', 'right', 'now', 'then'}
             if keywords and len(keywords) >= 2:
-                summary += f" Key topics included {keywords[0]} and {keywords[1]}."
+                # Filter out generic words and short words
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if len(relevant_keywords) >= 2:
+                    summary = f"{summary} Main topics included {relevant_keywords[0]} and {relevant_keywords[1]}."
+                elif len(relevant_keywords) == 1:
+                    summary = f"{summary} Main focus was {relevant_keywords[0]}."
+                else:
+                    # No good keywords, just add activity/tone context
+                    summary = f"{summary} This was an {activity} {tone} conversation period."
             elif keywords:
-                summary += f" Main topic was {keywords[0]}."
-            else:
-                summary += " The conversation covered various topics and updates."
-            words = summary.split()
-            # If still too short, add activity context
-            if len(words) < 10:
-                summary = f"During this {activity} {tone} phase, " + summary.lower()
+                relevant_keywords = [k for k in keywords if k.lower() not in generic_words and len(k) >= 4]
+                if relevant_keywords:
+                    summary = f"{summary} Main topic was {relevant_keywords[0]}."
+                else:
+                    summary = f"{summary} This was an {activity} {tone} conversation period."
             words = summary.split()
         
         if len(words) > 20:
             # Truncate to 20 words, try to end at sentence boundary
             truncated_words = words[:20]
             summary = ' '.join(truncated_words)
-            # Remove trailing incomplete words if they don't end properly
             if summary[-1] not in '.!?,;:':
                 summary += '.'
         
